@@ -384,6 +384,38 @@
   }
   .tabla-semanal td.slot-cerrado{background:transparent; border:none;}
 
+  .semana-slots-grid{
+    display:grid; grid-template-columns:repeat(6, 1fr); gap:8px; min-width:560px;
+  }
+  .dia-col{display:flex; flex-direction:column; gap:6px;}
+  .dia-col .dia-header{
+    font-family:'Cinzel', serif; color:var(--brass-bright); font-size:11px;
+    text-align:center; letter-spacing:0.03em; margin-bottom:2px;
+  }
+  .dia-col .sin-cupos{color:var(--parchment-dim); font-size:10.5px; text-align:center; padding:6px 0;}
+  .slot-chip-btn{
+    border:1px solid var(--brass-dim); background:var(--bg-panel-3); color:var(--parchment);
+    padding:7px 2px; font-size:12px; cursor:pointer; text-align:center; font-family:'Crimson Pro', serif;
+    transition:background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .slot-chip-btn:hover{border-color:var(--brass-bright); background:var(--brass); color:var(--ink);}
+
+  .btn-bell{
+    position:relative; display:inline-flex; align-items:center; justify-content:center;
+    width:38px; height:38px; padding:0; border-radius:50%; cursor:pointer;
+    border:1px solid var(--brass-dim); background:var(--bg-panel-3);
+    transition:border-color .15s ease;
+  }
+  .btn-bell:hover{border-color:var(--brass);}
+  .btn-bell svg{width:17px; height:17px; fill:none; stroke:var(--brass-bright); stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;}
+  .btn-bell .badge{
+    position:absolute; bottom:-2px; right:-2px; width:15px; height:15px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700;
+    border:1.5px solid var(--bg-panel-2); line-height:1;
+  }
+  .btn-bell.activo .badge{background:var(--good); color:#0d1a0e;}
+  .btn-bell.inactivo .badge{background:var(--wine-bright); color:var(--parchment);}
+
   @media (max-width:640px){
     main.wrap{padding:20px 14px 50px;}
     header.topbar{padding:14px 16px; flex-wrap:wrap; gap:10px;}
@@ -511,8 +543,11 @@
           <div class="cal-month-label" id="semana-label"></div>
           <button class="btn" id="btn-semana-next">&rarr;</button>
         </div>
-        <div style="margin:14px 0;">
-          <button class="btn" id="btn-activar-avisos">Activar avisos en este dispositivo</button>
+        <div style="text-align:center; margin:10px 0 14px;">
+          <button class="btn-bell" id="btn-activar-avisos" type="button" title="Avisos">
+            <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span class="badge" id="avisos-badge"></span>
+          </button>
         </div>
         <div style="overflow-x:auto;">
           <table class="tabla-semanal">
@@ -713,12 +748,9 @@
           <div class="cal-month-label" id="ag-semana-label"></div>
           <button class="btn" id="btn-ag-semana-next">&rarr;</button>
         </div>
-        <p style="color:var(--parchment-dim); font-size:13px; margin:10px 0 0;">Toca un bloque libre para reservarlo.</p>
+        <p style="color:var(--parchment-dim); font-size:13px; margin:10px 0 0;">Toca una hora disponible para reservarla.</p>
         <div style="overflow-x:auto; margin-top:10px;">
-          <table class="tabla-semanal" id="ag-tabla-semanal">
-            <thead><tr id="ag-semana-head"></tr></thead>
-            <tbody id="ag-semana-body"></tbody>
-          </table>
+          <div class="semana-slots-grid" id="ag-semana-slots"></div>
         </div>
         <button class="btn btn-block" id="btn-volver-form" style="margin-top:14px;">&larr; Cambiar datos</button>
       </div>
@@ -899,11 +931,11 @@
       const users = {
         administrador: {password:'123456', role:'admin', nombre:'Administrador'},
         neptali: {password:'123456', role:'barbero', puesto:1, nombre:'Neptali'},
-        puesto2: {password:'1234', role:'barbero', puesto:2, nombre:'Barbero 2'},
-        puesto3: {password:'1234', role:'barbero', puesto:3, nombre:'Barbero 3'},
-        puesto4: {password:'1234', role:'barbero', puesto:4, nombre:'Barbero 4'},
-        puesto5: {password:'1234', role:'barbero', puesto:5, nombre:'Barbero 5'},
-        puesto6: {password:'1234', role:'barbero', puesto:6, nombre:'Barbero 6'}
+        alex2: {password:'123456', role:'barbero', puesto:2, nombre:'Alex'},
+        cristobal: {password:'123456', role:'barbero', puesto:3, nombre:'Cristobal'},
+        erick: {password:'123456', role:'barbero', puesto:4, nombre:'Erick'},
+        gerardo: {password:'123456', role:'barbero', puesto:5, nombre:'Gerardo'},
+        alex6: {password:'123456', role:'barbero', puesto:6, nombre:'Alex'}
       };
       localStorage.setItem(LS.users, JSON.stringify(users));
     }
@@ -945,6 +977,38 @@
     }
   }
   migrate();
+
+  function migrarNombresBarberos(){
+    // Instalaciones anteriores tenían "puesto2".."puesto6" genéricos.
+    // Los actualizamos a los nombres reales de cada barbero.
+    const mapa = {
+      puesto2: {username:'alex2', nombre:'Alex'},
+      puesto3: {username:'cristobal', nombre:'Cristobal'},
+      puesto4: {username:'erick', nombre:'Erick'},
+      puesto5: {username:'gerardo', nombre:'Gerardo'},
+      puesto6: {username:'alex6', nombre:'Alex'}
+    };
+    const users = getUsers();
+    let changedUsers = false;
+    Object.keys(mapa).forEach(viejo=>{
+      const nuevo = mapa[viejo];
+      if(users[viejo] && !users[nuevo.username]){
+        users[nuevo.username] = Object.assign({}, users[viejo], {password:'123456', nombre:nuevo.nombre});
+        delete users[viejo];
+        changedUsers = true;
+
+        const cortes = getCortes();
+        let cortesChanged = false;
+        const actualizados = cortes.map(c=>{
+          if(c.barbero===viejo){ cortesChanged = true; return Object.assign({}, c, {barbero:nuevo.username, barberoNombre:nuevo.nombre}); }
+          return c;
+        });
+        if(cortesChanged) setCortes(actualizados);
+      }
+    });
+    if(changedUsers) localStorage.setItem(LS.users, JSON.stringify(users));
+  }
+  migrarNombresBarberos();
 
   function migrarDuracionServicios(){
     const services = getServices();
@@ -1701,23 +1765,36 @@
     return d.toISOString();
   }
   function generarSlots(fechaStr, duracionMin, citasExistentes){
+    // Genera horas de inicio encadenadas: parte en la apertura, y cada siguiente
+    // hora disponible es exactamente cuando termina el corte anterior (propio o
+    // de otro cliente ya agendado), en vez de horas fijas cada 15/60 minutos.
     const horario = horarioDelDia(fechaStr);
     if(!horario) return [];
-    const paso = 15;
+
     let minimoInicio = horario.apertura;
     if(fechaStr === dateKeyFromDate(new Date())){
       const ahora = new Date();
       const minutosAhora = ahora.getHours()*60 + ahora.getMinutes() + 15; // 15 min de margen
-      minimoInicio = Math.max(minimoInicio, Math.ceil(minutosAhora/paso)*paso);
+      minimoInicio = Math.max(minimoInicio, minutosAhora);
     }
+
+    const citas = citasExistentes.slice().sort((a,b) => minutosDeISO(a.inicio) - minutosDeISO(b.inicio));
     const slots = [];
-    for(let t=minimoInicio; t+duracionMin<=horario.cierre; t+=paso){
-      const finT = t + duracionMin;
-      const solapa = citasExistentes.some(c=>{
+    let candidato = minimoInicio;
+    let guardaInfinita = 0;
+
+    while(candidato + duracionMin <= horario.cierre && guardaInfinita < 200){
+      guardaInfinita++;
+      const choque = citas.find(c=>{
         const cIni = minutosDeISO(c.inicio), cFin = minutosDeISO(c.fin);
-        return t < cFin && cIni < finT;
+        return candidato < cFin && cIni < (candidato + duracionMin);
       });
-      if(!solapa) slots.push(t);
+      if(choque){
+        candidato = minutosDeISO(choque.fin); // salta justo al final de ese corte
+        continue;
+      }
+      slots.push(candidato);
+      candidato = candidato + duracionMin; // el siguiente bloque empieza al terminar este
     }
     return slots;
   }
@@ -1734,6 +1811,15 @@
   }
   function avisosActivadosPuesto(n){
     return localStorage.getItem('nbs_avisos_puesto_' + n) === '1';
+  }
+  function actualizarBotonAvisos(n){
+    const btn = document.getElementById('btn-activar-avisos');
+    const badge = document.getElementById('avisos-badge');
+    const activo = avisosActivadosPuesto(n);
+    btn.classList.toggle('activo', activo);
+    btn.classList.toggle('inactivo', !activo);
+    badge.textContent = activo ? '✓' : '✕';
+    btn.title = activo ? 'Avisos activados en este dispositivo' : 'Avisos desactivados — toca para activarlos';
   }
   async function mostrarAviso(titulo, cuerpo){
     if(!notifPermitidas()) return;
@@ -1785,6 +1871,7 @@
   }
 
   async function renderAgendaSemanal(n, offset){
+    actualizarBotonAvisos(n);
     const hoy = new Date();
     const lunes = sumarDias(inicioDeSemana(hoy), offset*7);
     const dias = [];
@@ -1866,6 +1953,7 @@
       if(!token) throw new Error('No se obtuvo token');
       await fsGuardarTokenPush(activePuesto, token);
       localStorage.setItem('nbs_avisos_puesto_' + activePuesto, '1');
+      actualizarBotonAvisos(activePuesto);
       alert('Avisos activados en este dispositivo para el Puesto ' + activePuesto + '. Ahora te van a llegar aunque tengas la app cerrada.');
     } catch(e){
       console.warn('No se pudo activar el push real', e);
@@ -1966,62 +2054,43 @@
     const labelInicio = dias[0].getDate() + (dias[0].getMonth()!==dias[5].getMonth() ? ' de ' + mesesLargo[dias[0].getMonth()] : '');
     document.getElementById('ag-semana-label').textContent = 'Semana del ' + labelInicio + ' al ' + labelFin;
 
-    let headHtml = '<th class="hora-col"></th>';
-    dias.forEach((d,i)=>{ headHtml += '<th>' + nombresDia[i] + ' ' + d.getDate() + '</th>'; });
-    document.getElementById('ag-semana-head').innerHTML = headHtml;
-
     const fechasStr = dias.map(d => dateKeyFromDate(d));
-    const bodyEl = document.getElementById('ag-semana-body');
-    bodyEl.innerHTML = '<tr><td colspan="7" style="text-align:center; background:none; border:none; color:var(--parchment-dim);">Cargando…</td></tr>';
+    const gridEl = document.getElementById('ag-semana-slots');
+    gridEl.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:var(--parchment-dim); font-size:13px;">Cargando…</p>';
 
     let citasPorDia = [[],[],[],[],[],[]];
     try{
       citasPorDia = await Promise.all(fechasStr.map(f => fsCitasPorPuestoYFecha(datos.puesto, f)));
     }catch(e){
-      bodyEl.innerHTML = '<tr><td colspan="7" style="text-align:center; background:none; border:none; color:var(--parchment-dim);">No se pudo cargar el calendario. Revisa tu conexión.</td></tr>';
+      gridEl.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:var(--parchment-dim); font-size:13px;">No se pudo cargar el calendario. Revisa tu conexión.</p>';
       return;
     }
 
-    const hoyKey = dateKeyFromDate(hoy);
-    const margenMin = hoy.getHours()*60 + hoy.getMinutes() + 15;
-
-    let bodyHtml = '';
-    for(let h=10; h<=19; h++){
-      bodyHtml += '<tr><td class="hora-col">' + pad(h) + ':00</td>';
-      for(let i=0;i<6;i++){
-        const fechaStr = fechasStr[i];
-        const horario = horarioDelDia(fechaStr);
-        const cierra = horario ? horario.cierre : null;
-        const pasado = fechaStr===hoyKey && (h*60) < margenMin;
-
-        if(!horario || (h*60 + duracion) > cierra || pasado){
-          bodyHtml += '<td class="slot-cerrado"></td>';
-          continue;
-        }
-        const ocupado = citasPorDia[i].some(c=>{
-          const cIni = minutosDeISO(c.inicio), cFin = minutosDeISO(c.fin);
-          return (h*60) < cFin && cIni < (h*60 + duracion);
-        });
-        if(ocupado){
-          bodyHtml += '<td class="slot-ocupado">Ocupado</td>';
-        } else {
-          bodyHtml += '<td class="slot-disponible" data-fecha="' + fechaStr + '" data-hora="' + h + '">Libre</td>';
-        }
+    let html = '';
+    dias.forEach((d,i)=>{
+      const fechaStr = fechasStr[i];
+      const slots = generarSlots(fechaStr, duracion, citasPorDia[i]);
+      html += '<div class="dia-col"><div class="dia-header">' + nombresDia[i] + ' ' + d.getDate() + '</div>';
+      if(slots.length===0){
+        html += '<div class="sin-cupos">Sin cupos</div>';
+      } else {
+        html += slots.map(m =>
+          '<button type="button" class="slot-chip-btn" data-fecha="' + fechaStr + '" data-min="' + m + '">' + minutosAHHMM(m) + '</button>'
+        ).join('');
       }
-      bodyHtml += '</tr>';
-    }
-    bodyEl.innerHTML = bodyHtml;
+      html += '</div>';
+    });
+    gridEl.innerHTML = html;
 
-    bodyEl.querySelectorAll('.slot-disponible').forEach(td=>{
-      td.addEventListener('click', function(){
-        seleccionarSlotSemanal(this.getAttribute('data-fecha'), parseInt(this.getAttribute('data-hora'),10));
+    gridEl.querySelectorAll('.slot-chip-btn').forEach(btn=>{
+      btn.addEventListener('click', function(){
+        seleccionarSlotSemanal(this.getAttribute('data-fecha'), parseInt(this.getAttribute('data-min'),10));
       });
     });
   }
 
-  function seleccionarSlotSemanal(fechaStr, hora){
+  function seleccionarSlotSemanal(fechaStr, inicioMin){
     const datos = window._agDatos;
-    const inicioMin = hora*60;
     const finMin = inicioMin + (datos.servicio.duracionMin || 45);
     datos.fecha = fechaStr;
     window._agSeleccion = {inicioMin, finMin};
