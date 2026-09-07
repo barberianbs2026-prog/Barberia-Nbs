@@ -322,7 +322,7 @@
       var(--bg-photo);
     background-size:cover; background-position:center; background-repeat:no-repeat;
   }
-  .agendar-wrap{max-width:480px; margin:0 auto; padding:36px 20px 60px;}
+  .agendar-wrap{max-width:620px; margin:0 auto; padding:36px 20px 60px;}
   .agendar-card{
     background:linear-gradient(180deg, var(--bg-panel-2), var(--bg-panel));
     border:1px solid var(--brass-dim); box-shadow:var(--shadow); padding:32px 28px;
@@ -371,6 +371,18 @@
     display:block; background:var(--brass); color:var(--ink); border-radius:4px;
     padding:3px 6px; margin-bottom:3px; font-size:11.5px; font-weight:600; line-height:1.3;
   }
+  .cita-chip small{display:block; font-weight:400; font-size:10.5px; opacity:0.85;}
+
+  .tabla-semanal td.slot-disponible{
+    cursor:pointer; border-color:var(--brass); text-align:center; vertical-align:middle;
+    color:var(--brass-bright); font-size:12px; font-weight:600; transition:background .15s ease, color .15s ease;
+  }
+  .tabla-semanal td.slot-disponible:hover{background:var(--brass); color:var(--ink);}
+  .tabla-semanal td.slot-ocupado{
+    background:#231b17; color:var(--parchment-dim); text-align:center; vertical-align:middle;
+    font-size:11.5px; opacity:0.7;
+  }
+  .tabla-semanal td.slot-cerrado{background:transparent; border:none;}
 
   @media (max-width:640px){
     main.wrap{padding:20px 14px 50px;}
@@ -691,19 +703,24 @@
           <label for="ag-servicio">Servicio</label>
           <select id="ag-servicio"></select>
         </div>
-        <div class="field">
-          <label for="ag-fecha">Fecha</label>
-          <input type="date" id="ag-fecha">
-        </div>
-        <button class="btn btn-solid btn-block" id="btn-ver-horas">Ver horas disponibles</button>
+        <button class="btn btn-solid btn-block" id="btn-ver-calendario">Ver calendario</button>
         <div class="login-error" id="ag-error"></div>
       </div>
 
       <div id="agendar-paso-horas" style="display:none;">
-        <p style="color:var(--parchment-dim); font-size:14.5px; margin:0;">Elige una hora disponible:</p>
-        <div class="slots-grid" id="ag-slots"></div>
-        <div id="ag-sin-horas" style="display:none; color:var(--parchment-dim); font-size:14.5px; margin-top:10px;">No quedan horas disponibles ese día para este barbero. Prueba con otra fecha.</div>
-        <button class="btn btn-block" id="btn-volver-form">&larr; Cambiar datos</button>
+        <div class="cal-nav" style="max-width:none;">
+          <button class="btn" id="btn-ag-semana-prev">&larr;</button>
+          <div class="cal-month-label" id="ag-semana-label"></div>
+          <button class="btn" id="btn-ag-semana-next">&rarr;</button>
+        </div>
+        <p style="color:var(--parchment-dim); font-size:13px; margin:10px 0 0;">Toca un bloque libre para reservarlo.</p>
+        <div style="overflow-x:auto; margin-top:10px;">
+          <table class="tabla-semanal" id="ag-tabla-semanal">
+            <thead><tr id="ag-semana-head"></tr></thead>
+            <tbody id="ag-semana-body"></tbody>
+          </table>
+        </div>
+        <button class="btn btn-block" id="btn-volver-form" style="margin-top:14px;">&larr; Cambiar datos</button>
       </div>
 
       <div id="agendar-paso-confirmar" style="display:none;">
@@ -1335,8 +1352,7 @@
         + '<div class="stat-card"><div class="label">Efectivo</div><div class="value">'+money(efectivo)+'</div></div>'
         + '<div class="stat-card wine"><div class="label">Transferencia</div><div class="value">'+money(transferencia)+'</div></div>';
       splitBox.innerHTML =
-        '<div class="split-card"><div class="label">Tu parte (60%)</div><div class="value">'+money(total*SPLIT_BARBERO)+'</div></div>'
-        + '<div class="split-card wine"><div class="label">Parte barbería (40%)</div><div class="value">'+money(total*SPLIT_BARBERIA)+'</div></div>';
+        '<div class="split-card"><div class="label">Tu recaudación</div><div class="value">'+money(total*SPLIT_BARBERO)+'</div></div>';
       confirmBtn.style.display = 'inline-block';
     }
     document.getElementById('modal-cierre-puesto').classList.add('active');
@@ -1610,8 +1626,7 @@
           + '<div class="stat-card"><div class="label">Total recaudado</div><div class="value">'+money(total)+'</div></div>'
         + '</div>'
         + '<div class="split-row">'
-          + '<div class="split-card"><div class="label">Tu parte (60%)</div><div class="value">'+money(total*SPLIT_BARBERO)+'</div></div>'
-          + '<div class="split-card wine"><div class="label">Parte barbería (40%)</div><div class="value">'+money(total*SPLIT_BARBERIA)+'</div></div>'
+          + '<div class="split-card"><div class="label">Tu recaudación</div><div class="value">'+money(total*SPLIT_BARBERO)+'</div></div>'
         + '</div>'
         + '<div style="overflow-x:auto; margin-top:18px;"><table><thead><tr><th>Inicio</th><th>Fin</th><th>Servicio</th><th>Duración</th><th>Pago</th><th>Monto</th></tr></thead><tbody>'
         + propios.map(c => '<tr><td>'+fmtHora(c.inicio)+'</td><td>'+fmtHora(c.fin)+'</td><td>'+c.servicioNombre+'</td><td>'+fmtDuracion(c.duracionMs)+'</td><td>'+c.medioPago+'</td><td class="num">'+money(c.precio)+'</td></tr>').join('')
@@ -1806,7 +1821,8 @@
           bodyHtml += '<td></td>';
         } else {
           bodyHtml += '<td>' + citasHora.map(c =>
-            '<span class="cita-chip">' + fmtHora(c.inicio) + ' ' + escapeHtml(c.clienteNombre) + '</span>'
+            '<span class="cita-chip">' + fmtHora(c.inicio) + ' ' + escapeHtml(c.clienteNombre)
+            + '<small>' + escapeHtml(c.servicioNombre) + '</small></span>'
           ).join('') + '</td>';
         }
       }
@@ -1860,17 +1876,11 @@
   /* ============================================================
      AGENDA PÚBLICA (clientes, sin login) — enlace para compartir
   ============================================================ */
+  let agPublicWeekOffset = 0;
+
   async function goAgendar(){
     showScreen('screen-agendar');
     resetAgendarUI();
-
-    const fechaInput = document.getElementById('ag-fecha');
-    const hoy = new Date();
-    fechaInput.min = dateKeyFromDate(hoy);
-    const maxFecha = new Date(hoy);
-    maxFecha.setDate(maxFecha.getDate() + 30);
-    fechaInput.max = dateKeyFromDate(maxFecha);
-    fechaInput.value = dateKeyFromDate(hoy);
 
     const errBox = document.getElementById('ag-error');
     errBox.textContent = '';
@@ -1903,54 +1913,27 @@
     window._agSeleccion = null;
   }
 
-  document.getElementById('btn-ver-horas').addEventListener('click', async function(){
+  document.getElementById('btn-ver-calendario').addEventListener('click', async function(){
     const errBox = document.getElementById('ag-error');
     errBox.textContent = '';
     const nombre = document.getElementById('ag-nombre').value.trim();
     const telefono = document.getElementById('ag-telefono').value.trim();
     const puesto = parseInt(document.getElementById('ag-barbero').value, 10);
     const servicioId = document.getElementById('ag-servicio').value;
-    const fecha = document.getElementById('ag-fecha').value;
 
-    if(!nombre || !telefono || !puesto || !servicioId || !fecha){
-      errBox.textContent = 'Completa todos los campos para ver las horas disponibles.';
+    if(!nombre || !telefono || !puesto || !servicioId){
+      errBox.textContent = 'Completa todos los campos para ver el calendario.';
       return;
     }
     const servicio = (window._agServicios || []).find(s=>s.id===servicioId);
     if(!servicio){ errBox.textContent = 'Selecciona un servicio válido.'; return; }
-    if(!horarioDelDia(fecha)){
-      errBox.textContent = 'Los domingos la barbería permanece cerrada. Elige otro día.';
-      return;
-    }
 
-    this.disabled = true; this.textContent = 'Buscando horas…';
-    let citasExistentes = [];
-    try{
-      citasExistentes = await fsCitasPorPuestoYFecha(puesto, fecha);
-    }catch(e){
-      errBox.textContent = 'No se pudo conectar con la agenda. Intenta nuevamente.';
-      this.disabled = false; this.textContent = 'Ver horas disponibles';
-      return;
-    }
-    this.disabled = false; this.textContent = 'Ver horas disponibles';
+    window._agDatos = {nombre, telefono, puesto, servicio};
+    agPublicWeekOffset = 0;
 
-    const slots = generarSlots(fecha, servicio.duracionMin || 45, citasExistentes);
-    window._agDatos = {nombre, telefono, puesto, servicio, fecha};
-
-    const slotsGrid = document.getElementById('ag-slots');
-    const sinHoras = document.getElementById('ag-sin-horas');
-    if(slots.length===0){
-      slotsGrid.innerHTML = '';
-      sinHoras.style.display = 'block';
-    } else {
-      sinHoras.style.display = 'none';
-      slotsGrid.innerHTML = slots.map(m => '<button type="button" class="slot-btn" data-min="'+m+'">'+minutosAHHMM(m)+'</button>').join('');
-      slotsGrid.querySelectorAll('.slot-btn').forEach(btn=>{
-        btn.addEventListener('click', function(){ seleccionarSlot(parseInt(this.getAttribute('data-min'),10)); });
-      });
-    }
     document.getElementById('agendar-paso-form').style.display = 'none';
     document.getElementById('agendar-paso-horas').style.display = 'block';
+    renderAgCalendarioPublico(0);
   });
 
   document.getElementById('btn-volver-form').addEventListener('click', function(){
@@ -1958,13 +1941,93 @@
     document.getElementById('agendar-paso-form').style.display = 'block';
   });
 
-  function seleccionarSlot(minutoInicio){
+  document.getElementById('btn-ag-semana-prev').addEventListener('click', function(){
+    agPublicWeekOffset -= 1;
+    renderAgCalendarioPublico(agPublicWeekOffset);
+  });
+  document.getElementById('btn-ag-semana-next').addEventListener('click', function(){
+    agPublicWeekOffset += 1;
+    renderAgCalendarioPublico(agPublicWeekOffset);
+  });
+
+  async function renderAgCalendarioPublico(offset){
     const datos = window._agDatos;
-    const finMin = minutoInicio + (datos.servicio.duracionMin || 45);
-    window._agSeleccion = {inicioMin:minutoInicio, finMin:finMin};
+    if(!datos) return;
+    const duracion = datos.servicio.duracionMin || 45;
+
+    const hoy = new Date();
+    const lunes = sumarDias(inicioDeSemana(hoy), offset*7);
+    const dias = [];
+    for(let i=0;i<6;i++) dias.push(sumarDias(lunes, i));
+
+    const nombresDia = ['Lun','Mar','Mié','Jue','Vie','Sáb'];
+    const mesesLargo = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    const labelFin = dias[5].getDate() + ' de ' + mesesLargo[dias[5].getMonth()];
+    const labelInicio = dias[0].getDate() + (dias[0].getMonth()!==dias[5].getMonth() ? ' de ' + mesesLargo[dias[0].getMonth()] : '');
+    document.getElementById('ag-semana-label').textContent = 'Semana del ' + labelInicio + ' al ' + labelFin;
+
+    let headHtml = '<th class="hora-col"></th>';
+    dias.forEach((d,i)=>{ headHtml += '<th>' + nombresDia[i] + ' ' + d.getDate() + '</th>'; });
+    document.getElementById('ag-semana-head').innerHTML = headHtml;
+
+    const fechasStr = dias.map(d => dateKeyFromDate(d));
+    const bodyEl = document.getElementById('ag-semana-body');
+    bodyEl.innerHTML = '<tr><td colspan="7" style="text-align:center; background:none; border:none; color:var(--parchment-dim);">Cargando…</td></tr>';
+
+    let citasPorDia = [[],[],[],[],[],[]];
+    try{
+      citasPorDia = await Promise.all(fechasStr.map(f => fsCitasPorPuestoYFecha(datos.puesto, f)));
+    }catch(e){
+      bodyEl.innerHTML = '<tr><td colspan="7" style="text-align:center; background:none; border:none; color:var(--parchment-dim);">No se pudo cargar el calendario. Revisa tu conexión.</td></tr>';
+      return;
+    }
+
+    const hoyKey = dateKeyFromDate(hoy);
+    const margenMin = hoy.getHours()*60 + hoy.getMinutes() + 15;
+
+    let bodyHtml = '';
+    for(let h=10; h<=19; h++){
+      bodyHtml += '<tr><td class="hora-col">' + pad(h) + ':00</td>';
+      for(let i=0;i<6;i++){
+        const fechaStr = fechasStr[i];
+        const horario = horarioDelDia(fechaStr);
+        const cierra = horario ? horario.cierre : null;
+        const pasado = fechaStr===hoyKey && (h*60) < margenMin;
+
+        if(!horario || (h*60 + duracion) > cierra || pasado){
+          bodyHtml += '<td class="slot-cerrado"></td>';
+          continue;
+        }
+        const ocupado = citasPorDia[i].some(c=>{
+          const cIni = minutosDeISO(c.inicio), cFin = minutosDeISO(c.fin);
+          return (h*60) < cFin && cIni < (h*60 + duracion);
+        });
+        if(ocupado){
+          bodyHtml += '<td class="slot-ocupado">Ocupado</td>';
+        } else {
+          bodyHtml += '<td class="slot-disponible" data-fecha="' + fechaStr + '" data-hora="' + h + '">Libre</td>';
+        }
+      }
+      bodyHtml += '</tr>';
+    }
+    bodyEl.innerHTML = bodyHtml;
+
+    bodyEl.querySelectorAll('.slot-disponible').forEach(td=>{
+      td.addEventListener('click', function(){
+        seleccionarSlotSemanal(this.getAttribute('data-fecha'), parseInt(this.getAttribute('data-hora'),10));
+      });
+    });
+  }
+
+  function seleccionarSlotSemanal(fechaStr, hora){
+    const datos = window._agDatos;
+    const inicioMin = hora*60;
+    const finMin = inicioMin + (datos.servicio.duracionMin || 45);
+    datos.fecha = fechaStr;
+    window._agSeleccion = {inicioMin, finMin};
     document.getElementById('ag-resumen').innerHTML =
       '<strong>' + escapeHtml(datos.nombre) + '</strong><br>'
-      + fmtFecha(datos.fecha) + ' a las ' + minutosAHHMM(minutoInicio) + '<br>'
+      + fmtFecha(fechaStr) + ' a las ' + minutosAHHMM(inicioMin) + '<br>'
       + escapeHtml(datos.servicio.nombre) + ' (' + (datos.servicio.duracionMin||45) + ' min) — ' + money(datos.servicio.precio) + '<br>'
       + 'Puesto ' + datos.puesto;
     document.getElementById('agendar-paso-horas').style.display = 'none';
@@ -1974,6 +2037,7 @@
   document.getElementById('btn-volver-horas').addEventListener('click', function(){
     document.getElementById('agendar-paso-confirmar').style.display = 'none';
     document.getElementById('agendar-paso-horas').style.display = 'block';
+    renderAgCalendarioPublico(agPublicWeekOffset);
   });
 
   document.getElementById('btn-confirmar-reserva').addEventListener('click', async function(){
@@ -1991,6 +2055,7 @@
         alert('Justo se ocupó esa hora. Elige otra, por favor.');
         document.getElementById('agendar-paso-confirmar').style.display = 'none';
         document.getElementById('agendar-paso-horas').style.display = 'block';
+        renderAgCalendarioPublico(agPublicWeekOffset);
         this.disabled = false; this.textContent = 'Confirmar reserva';
         return;
       }
