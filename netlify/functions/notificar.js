@@ -64,6 +64,7 @@ exports.handler = async function(event){
     const puesto = body.puesto;
     const titulo = body.titulo;
     const cuerpo = body.cuerpo || '';
+    console.log('Solicitud recibida. Puesto:', puesto, '| Titulo:', titulo);
     if(!puesto || !titulo){
       return {statusCode: 400, body: JSON.stringify({error: 'Faltan datos (puesto o titulo).'})};
     }
@@ -71,6 +72,9 @@ exports.handler = async function(event){
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
     const privateKey = (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+    console.log('Variables de entorno presentes:', {
+      projectId: !!projectId, clientEmail: !!clientEmail, privateKey: !!privateKey
+    });
     if(!projectId || !clientEmail || !privateKey){
       return {statusCode: 500, body: JSON.stringify({error: 'Faltan variables de entorno de Firebase en Netlify.'})};
     }
@@ -79,25 +83,53 @@ exports.handler = async function(event){
       'https://www.googleapis.com/auth/datastore',
       'https://www.googleapis.com/auth/firebase.messaging'
     ]);
+    console.log('Token de acceso a Google obtenido correctamente.');
 
-    // 1) Leer los tokens de notificación guardados para este puesto
+    // 1) Resolver qué usuario (barbero) está asignado actualmente a este puesto
+    const asignUrl = 'https://firestore.googleapis.com/v1/projects/' + projectId +
+      '/databases/(default)/documents/config/puesto_a_usuario';
+    const asignResp = await fetch(asignUrl, {headers: {Authorization: 'Bearer ' + accessToken}});
+    console.log('Consulta a config/puesto_a_usuario, status:', asignResp.status);
+    let username = null;
+    if(asignResp.ok){
+      const asignData = await asignResp.json();
+      console.log('Datos de puesto_a_usuario:', JSON.stringify(asignData));
+      const mapaValue = asignData.fields && asignData.fields.mapa && asignData.fields.mapa.mapValue;
+      const campos = mapaValue && mapaValue.fields;
+      if(campos && campos[String(puesto)]){
+        username = campos[String(puesto)].stringValue;
+      }
+    } else {
+      console.log('No se pudo leer puesto_a_usuario:', await asignResp.text());
+    }
+    console.log('Usuario resuelto para el puesto', puesto, ':', username);
+    if(!username){
+      return {statusCode: 200, body: JSON.stringify({ok: true, enviados: 0, aviso: 'No hay un barbero asignado a ese puesto.'})};
+    }
+
+    // 2) Leer los tokens de notificación guardados para ESE usuario
     const docUrl = 'https://firestore.googleapis.com/v1/projects/' + projectId +
-      '/databases/(default)/documents/fcm_tokens/' + puesto;
+      '/databases/(default)/documents/fcm_tokens/' + username;
     const docResp = await fetch(docUrl, {headers: {Authorization: 'Bearer ' + accessToken}});
+    console.log('Consulta a fcm_tokens/' + username + ', status:', docResp.status);
     let tokens = [];
     if(docResp.ok){
       const docData = await docResp.json();
+      console.log('Datos de fcm_tokens:', JSON.stringify(docData));
       const arrayValue = docData.fields && docData.fields.tokens && docData.fields.tokens.arrayValue;
       if(arrayValue && arrayValue.values){
         tokens = arrayValue.values.map(v => v.stringValue).filter(Boolean);
       }
+    } else {
+      console.log('No se pudo leer fcm_tokens:', await docResp.text());
     }
+    console.log('Tokens encontrados para', username, ':', tokens.length);
 
     if(tokens.length === 0){
       return {statusCode: 200, body: JSON.stringify({ok: true, enviados: 0, aviso: 'No hay dispositivos registrados para este puesto.'})};
     }
 
-    // 2) Enviar el push a cada dispositivo registrado para ese puesto
+    // 3) Enviar el push a cada dispositivo registrado para ese usuario
     let enviados = 0;
     for(const token of tokens){
       const sendResp = await fetch('https://fcm.googleapis.com/v1/projects/' + projectId + '/messages:send', {
@@ -114,11 +146,19 @@ exports.handler = async function(event){
           }
         })
       });
-      if(sendResp.ok) enviados++;
+      if(sendResp.ok){
+        enviados++;
+        console.log('Push enviado correctamente a un token.');
+      } else {
+        const errTxt = await sendResp.text();
+        console.log('Error al enviar push a un token:', sendResp.status, errTxt);
+      }
     }
 
+    console.log('Resumen final: enviados', enviados, 'de', tokens.length);
     return {statusCode: 200, body: JSON.stringify({ok: true, enviados: enviados})};
   }catch(e){
+    console.log('Error inesperado en la función:', e.message);
     return {statusCode: 500, body: JSON.stringify({error: e.message})};
   }
 };
